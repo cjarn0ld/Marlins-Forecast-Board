@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <h2 class="text-2xl font-bold mb-4">Manage Question Outcomes</h2>
+    <div class="bg-white rounded-lg shadow p-6">
+        <table class="min-w-full">
+            <thead>
+                <tr>
+                    <th class="px-4 py-2">Question ID</th>
+                    <th class="px-4 py-2">Text</th>
+                    <th class="px-4 py-2">Due Date</th>
+                    <th class="px-4 py-2">Current Outcome</th>
+                    <th class="px-4 py-2">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for question in questions %}
+                <tr>
+                    <td class="border px-4 py-2">{{ question.question_id }}</td>
+                    <td class="border px-4 py-2">{{ question.text }}</td>
+                    <td class="border px-4 py-2">{{ question.due_date }}</td>
+                    <td class="border px-4 py-2">{{ question.actual if question.actual != None else 'Not Set' }}</td>
+                    <td class="border px-4 py-2">
+                        {% if question.due_date <= now %}
+                        <form method="POST" action="{{ url_for('update_outcome', question_id=question.id) }}" class="flex space-x-2">
+                            <input type="number" name="actual" min="0" max="1" step="0.01" 
+                                   value="{{ question.actual }}" 
+                                   class="border rounded px-2 py-1 w-24">
+                            <button type="submit" class="bg-blue-500 text-white px-3 py-1 rounded">Update</button>
+                        </form>
+                        {% else %}
+                        <span class="text-gray-500">Not Due Yet</span>
+                        {% endif %}
+                    </td>
+                    <!-- Add this inside the table row -->
+                    <td class="border px-4 py-2">
+                        <a href="{{ url_for('view_responses', question_id=question.id) }}" 
+                        class="text-blue-500 hover:underline">View Responses</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

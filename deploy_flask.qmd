@@ -1,0 +1,337 @@
+---
+title: "Marlins Forecast App"
+author: "Charles Arnold"
+date: "`r Sys.Date()`"
+format: html
+editor: visual
+---
+
+```{python}
+import os
+from datetime import datetime, timedelta
+from flask import Flask, render_template, request, redirect, url_for, session, flash
+from flask_sqlalchemy import SQLAlchemy
+from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
+from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.utils import secure_filename
+from utils.scoring import calculate_user_scores
+
+# App Configuration
+app = Flask(__name__)
+app.config['SECRET_KEY'] = 'test123'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///forecasts.db'
+app.config['UPLOAD_FOLDER'] = 'static/uploads'
+
+# Authentication Constants
+ADMIN_USERNAME = "admin"  # Single source for admin credentials
+ADMIN_PASSWORD = "test123"
+
+db = SQLAlchemy(app)
+login_manager = LoginManager(app)
+login_manager.login_view = 'login'
+
+class Admin(UserMixin, db.Model):
+   id = db.Column(db.Integer, primary_key=True)
+   username = db.Column(db.String(100), unique=True, nullable=False)
+   password_hash = db.Column(db.String(128), nullable=False)
+
+class Question(db.Model):
+   id = db.Column(db.Integer, primary_key=True)  
+   question_id = db.Column(db.String(100), unique=True, nullable=False)
+   text = db.Column(db.String(500), nullable=False)
+   due_date = db.Column(db.DateTime, nullable=False)
+   difficulty = db.Column(db.Integer, default=3)
+   actual = db.Column(db.Float, nullable=True)
+   image = db.Column(db.String(300), nullable=True)
+   forecasts = db.relationship('Forecast', backref='question', lazy=True)
+
+class Forecast(db.Model):
+   id = db.Column(db.Integer, primary_key=True)
+   user_id = db.Column(db.String(100), nullable=False)  
+   question_id = db.Column(db.Integer, db.ForeignKey('question.id'), nullable=False)
+   probability = db.Column(db.Float, nullable=False)
+   timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+
+@login_manager.user_loader
+def load_user(user_id):
+   return Admin.query.get(int(user_id))
+
+@app.route('/')
+def home():
+   return render_template('home.html')
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+   if request.method == 'POST':
+       username = request.form['username']
+       password = request.form['password']
+       
+       if username == ADMIN_USERNAME and password == ADMIN_PASSWORD:
+           admin = Admin.query.filter_by(username=ADMIN_USERNAME).first()
+           if not admin:
+               admin = Admin(
+                   username=ADMIN_USERNAME,
+                   password_hash=generate_password_hash(ADMIN_PASSWORD)
+               )
+               db.session.add(admin)
+               db.session.commit()
+           
+           login_user(admin)
+           return redirect(url_for('admin'))
+       else:
+           flash('Invalid username or password', 'error')
+           
+   return render_template('login.html')
+
+@app.route('/logout')
+@login_required
+def logout():
+   logout_user()
+   return redirect(url_for('home'))
+
+@app.route('/admin')
+@login_required
+def admin():
+   return render_template('admin.html')
+
+@app.route('/add_question', methods=['POST'])
+@login_required
+def add_question():
+   question_text = request.form['question_text']
+   due_date_str = request.form['due_date']
+   if len(due_date_str.split()) == 1:
+       due_date_str += ' 23:59:59'
+   due_date = datetime.strptime(due_date_str, '%Y-%m-%d %H:%M:%S')
+   difficulty = int(request.form.get('difficulty', 3))
+   question_id = request.form.get('question_id', '').strip()
+   
+   if not question_id:
+       import random
+       import string
+       question_id = ''.join(random.choices(string.ascii_letters + string.digits, k=8))
+   
+   actual = request.form.get('actual') if request.form.get('set_outcome') == 'on' else None
+   image = request.files.get('image')
+   filename = None
+
+   if image and allowed_file(image.filename):
+       filename = secure_filename(image.filename)
+       image.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+
+   question = Question(text=question_text, due_date=due_date, difficulty=difficulty, 
+                      actual=actual, image=filename, question_id=question_id)
+   db.session.add(question)
+   db.session.commit()
+
+   flash('Question added successfully', 'success')
+   return redirect(url_for('admin'))
+
+@app.route('/forecasts')
+def forecasts():
+   questions = Question.query.all()
+   now = datetime.utcnow()
+   featured = [q for q in questions if q.due_date > now]
+   previous = [q for q in questions if q.due_date <= now]
+   is_admin = current_user.is_authenticated
+   return render_template('forecasts.html', featured=featured, previous=previous, 
+                        is_admin=is_admin, now=now)
+
+@app.route('/question_responses/<int:question_id>')
+def question_responses(question_id):
+   question = Question.query.get_or_404(question_id)
+   forecasts = Forecast.query.filter_by(question_id=question_id)\
+               .order_by(Forecast.timestamp.desc()).all()
+   now = datetime.utcnow()
+   return render_template('question_responses.html', question=question, 
+                        forecasts=forecasts, now=now)
+
+@app.route('/question/<int:question_id>')
+def question_detail(question_id):
+   question = Question.query.get_or_404(question_id)
+   forecasts = Forecast.query.filter_by(question_id=question_id).all()
+   return render_template('question_detail.html', question=question, forecasts=forecasts)
+
+@app.route('/submit_forecast', methods=['POST'])
+def submit_forecast():
+   try:
+       question_id = request.form.get('question_id')
+       user_id = request.form.get('user_id')
+       probability = float(request.form.get('probability'))
+       
+       question = Question.query.get_or_404(question_id)
+       
+       if question.due_date <= datetime.utcnow():
+           flash('Question has expired', 'error')
+           return redirect(url_for('forecasts'))
+           
+       existing = Forecast.query.filter_by(
+           question_id=question_id,
+           user_id=user_id
+       ).first()
+       
+       if existing:
+           flash('You have already submitted a forecast', 'error')
+           return redirect(url_for('forecasts'))
+           
+       forecast = Forecast(
+           user_id=user_id,
+           question_id=question_id,
+           probability=probability
+       )
+       
+       db.session.add(forecast)
+       db.session.commit()
+       
+       flash('Forecast submitted successfully!', 'success')
+       return redirect(url_for('forecasts'))
+       
+   except Exception as e:
+       flash(str(e), 'error')
+       return redirect(url_for('forecasts'))
+
+@app.route('/leaderboard')
+def leaderboard():
+   outcomes = {q.id: q.actual for q in Question.query.filter(Question.actual != None)}
+   
+   if not outcomes:
+       return render_template('leaderboard.html', leaderboard=[])
+   
+   forecasts = Forecast.query.all()
+   user_scores = {}
+   
+   for forecast in forecasts:
+       if forecast.question_id in outcomes:
+           if forecast.user_id not in user_scores:
+               user_scores[forecast.user_id] = []
+           user_scores[forecast.user_id].append({
+               'prediction': forecast.probability,
+               'actual': outcomes[forecast.question_id]
+           })
+
+   leaderboard_data = []
+   for user_id, predictions in user_scores.items():
+       total_brier = sum((p['prediction'] - p['actual']) ** 2 for p in predictions)
+       avg_brier = total_brier / len(predictions)
+       accuracy = 1 - avg_brier
+       
+       leaderboard_data.append({
+           'user': user_id,
+           'questions': len(predictions),
+           'avg_brier_score': avg_brier,
+           'accuracy': accuracy * 100
+       })
+
+   leaderboard_data.sort(key=lambda x: x['accuracy'], reverse=True)
+   return render_template('leaderboard.html', leaderboard=leaderboard_data)
+
+@app.route('/manage_outcomes')
+@login_required
+def manage_outcomes():
+   questions = Question.query.all()
+   now = datetime.utcnow()
+   return render_template('manage_outcomes.html', questions=questions, now=now)
+
+@app.route('/manage_outcomes/<int:question_id>', methods=['POST'])
+@login_required
+def update_outcome(question_id):
+   question = Question.query.get_or_404(question_id)
+   actual = request.form.get('actual')
+   
+   try:
+       actual = float(actual)
+       if not 0 <= actual <= 1:
+           flash('Outcome must be between 0 and 1', 'error')
+           return redirect(url_for('manage_outcomes'))
+           
+       question.actual = actual
+       db.session.commit()
+       flash('Outcome updated successfully', 'success')
+       
+   except ValueError:
+       flash('Invalid outcome value', 'error')
+       
+   return redirect(url_for('manage_outcomes'))
+
+@app.route('/edit_question/<int:question_id>', methods=['GET', 'POST'])
+@login_required
+def edit_question(question_id):
+   question = Question.query.get_or_404(question_id)
+   
+   if request.method == 'POST':
+       question.text = request.form['question_text']
+       question.due_date = datetime.strptime(request.form['due_date'], '%Y-%m-%d %H:%M:%S')
+       question.difficulty = int(request.form['difficulty'])
+       
+       actual = request.form.get('actual')
+       if actual:
+           try:
+               actual = float(actual)
+               if 0 <= actual <= 1:
+                   question.actual = actual
+               else:
+                   flash('Outcome must be between 0 and 1', 'error')
+                   return render_template('edit_question.html', question=question)
+           except ValueError:
+               flash('Invalid outcome value', 'error')
+               return render_template('edit_question.html', question=question)
+       
+       image = request.files.get('image')
+       if image and allowed_file(image.filename):
+           if question.image:
+               old_image_path = os.path.join(app.config['UPLOAD_FOLDER'], question.image)
+               if os.path.exists(old_image_path):
+                   os.remove(old_image_path)
+           
+           filename = secure_filename(image.filename)
+           image.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+           question.image = filename
+           
+       db.session.commit()
+       flash('Question updated successfully', 'success')
+       return redirect(url_for('forecasts'))
+       
+   return render_template('edit_question.html', question=question)
+
+@app.route('/toggle_question_status/<int:question_id>')
+@login_required
+def toggle_question_status(question_id):
+   question = Question.query.get_or_404(question_id)
+   now = datetime.utcnow()
+   
+   if question.due_date <= now:
+       question.due_date = now + timedelta(days=1)
+   else:
+       question.due_date = now - timedelta(minutes=1)
+   
+   db.session.commit()
+   return redirect(url_for('forecasts'))
+
+@app.route('/view_responses/<int:question_id>')
+@login_required
+def view_responses(question_id):
+   question = Question.query.get_or_404(question_id)
+   forecasts = Forecast.query.filter_by(question_id=question_id)\
+               .order_by(Forecast.timestamp.desc()).all()
+   return render_template('view_responses.html', question=question, forecasts=forecasts)
+
+def allowed_file(filename):
+   ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
+   return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+if __name__ == '__main__':
+    with app.app_context():
+        db.create_all()
+        # Initialize admin if needed
+        admin_user = Admin.query.filter_by(username=ADMIN_USERNAME).first()
+        if not admin_user:
+            admin_user = Admin(
+                username=ADMIN_USERNAME, 
+                password_hash=generate_password_hash(ADMIN_PASSWORD)
+            )
+            db.session.add(admin_user)
+            db.session.commit()
+            
+    # Use Jupyter-friendly port and disable debug
+    app.run(port=8888, debug=False)
+
+```

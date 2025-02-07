@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Marlins Forecast Challenge</title>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-100">
+  <nav class="bg-black p-4">
+    <div class="container mx-auto flex items-center">
+      <img src="{{ url_for('static', filename='marlins_logo.png') }}" alt="Marlins Logo" class="h-8">
+      <h1 class="text-blue-400 text-2xl ml-4">Marlins Forecast Challenge Board</h1>
+    </div>
+    <div class="container mx-auto mt-2">
+      <a href="{{ url_for('home') }}" class="text-white mr-4">Home</a>
+      <a href="{{ url_for('forecasts') }}" class="text-white mr-4">Forecasts</a>
+      <a href="{{ url_for('leaderboard') }}" class="text-white mr-4">Leaderboard</a>
+      <a href="{{ url_for('admin') }}" class="text-white">Admin</a>
+    </div>
+  </nav>
+  
+  <div class="container mx-auto mt-8 px-4">
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        {% for message in messages %}
+          <div class="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded mb-4">
+            {{ message }}
+          </div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+    
+    {% block content %}{% endblock %}
+  </div>
+</body>
+</html>

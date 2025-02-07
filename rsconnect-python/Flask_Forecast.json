@@ -1,0 +1,12 @@
+{
+    "https://rsi-bb.marlins.com": {
+        "server_url": "https://rsi-bb.marlins.com",
+        "filename": "/Users/charlesarnold/Library/Mobile Documents/com~apple~CloudDocs/Documents/Shared Documents/Miami Marlins/Projects/Misc/Flask_Forecast",
+        "app_url": "https://rsi-bb.marlins.com/content/0549f443-b401-4578-ae9b-5e171bcf1b8d/",
+        "app_id": "92",
+        "app_guid": "0549f443-b401-4578-ae9b-5e171bcf1b8d",
+        "title": "Flask_Forecast",
+        "app_mode": "python-api",
+        "app_store_version": 1
+    }
+}

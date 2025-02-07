@@ -1,0 +1,187 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mx-auto px-4 py-8 space-y-8">
+    <div class="flex justify-end">
+        <a href="{{ url_for('logout') }}" class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600">Log Out</a>
+    </div>
+    <div class="bg-white rounded-lg shadow p-6">
+        <h2 class="text-2xl font-bold mb-4">Add New Question</h2>
+        <a href="{{ url_for('manage_outcomes') }}" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 mb-4 inline-block">Manage Outcomes</a>
+        <form method="POST" action="{{ url_for('add_question') }}" enctype="multipart/form-data" class="space-y-4" id="questionForm">
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Question ID</label>
+                <div class="space-y-2">
+                    <div class="flex space-x-2">
+                        <input type="text" name="question_id" id="question_id" 
+                               pattern="[A-Za-z0-9]{8}"
+                               title="ID must be 8 alphanumeric characters"
+                               required
+                               class="flex-grow block w-full border rounded-md shadow-sm py-2 px-3">
+                        <button type="button" id="generate_id" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">Generate ID</button>
+                    </div>
+                    <p class="text-sm text-gray-500">ID must be exactly 8 alphanumeric characters (letters and numbers only)</p>
+                </div>
+            </div>
+            
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Question Text</label>
+                <input type="text" name="question_text" required class="mt-1 block w-full border rounded-md shadow-sm py-2 px-3">
+            </div>
+            
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Due Date (YYYY-MM-DD HH:MM:SS)</label>
+                <input type="text" name="due_date" required placeholder="2024-12-31 23:59:59" class="mt-1 block w-full border rounded-md shadow-sm py-2 px-3">
+            </div>
+            
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Difficulty (1-5)</label>
+                <input type="number" name="difficulty" min="1" max="5" value="3" required class="mt-1 block w-full border rounded-md shadow-sm py-2 px-3">
+            </div>
+            
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Upload Image (optional)</label>
+                <div class="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md" 
+                     id="drop-zone">
+                    <div class="space-y-1 text-center">
+                        <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+                            <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" 
+                                  stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                        </svg>
+                        <div class="flex text-sm text-gray-600">
+                            <label for="file-upload" class="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500">
+                                <span>Upload a file</span>
+                                <input id="file-upload" name="image" type="file" class="sr-only" accept="image/*">
+                            </label>
+                            <p class="pl-1">or drag and drop</p>
+                        </div>
+                        <p class="text-xs text-gray-500">PNG, JPG, GIF up to 10MB</p>
+                    </div>
+                </div>
+                <div id="preview" class="mt-4 hidden">
+                    <div class="relative inline-block">
+                        <img id="preview-image" src="" alt="Preview" class="max-w-xs rounded-lg shadow-md">
+                        <button type="button" id="delete-image" class="absolute top-2 right-2 bg-red-500 text-white rounded-full p-2 hover:bg-red-600">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Set Outcome Now?</label>
+                <input type="checkbox" id="set_outcome" name="set_outcome" class="mt-1">
+            </div>
+            
+            <div id="outcome_section" style="display: none;">
+                <label class="block text-sm font-medium text-gray-700">Actual Outcome (optional)</label>
+                <input type="number" name="actual" min="0" max="1" step="0.01" class="border rounded px-3 py-2 w-full">
+            </div>
+            
+            <button type="submit" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">Add Question</button>
+        </form>
+    </div>
+</div>
+
+<script>
+document.getElementById('set_outcome').addEventListener('change', function() {
+    document.getElementById('outcome_section').style.display = this.checked ? 'block' : 'none';
+});
+
+document.getElementById('generate_id').addEventListener('click', function() {
+    const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let result = '';
+    for (let i = 0; i < 8; i++) {
+        result += characters.charAt(Math.floor(Math.random() * characters.length));
+    }
+    document.getElementById('question_id').value = result;
+});
+
+const dropZone = document.getElementById('drop-zone');
+const fileUpload = document.getElementById('file-upload');
+const preview = document.getElementById('preview');
+const previewImage = document.getElementById('preview-image');
+const deleteButton = document.getElementById('delete-image');
+const originalDropZoneContent = dropZone.innerHTML;
+
+['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+    dropZone.addEventListener(eventName, preventDefaults, false);
+});
+
+function preventDefaults(e) {
+    e.preventDefault();
+    e.stopPropagation();
+}
+
+['dragenter', 'dragover'].forEach(eventName => {
+    dropZone.addEventListener(eventName, highlight, false);
+});
+
+['dragleave', 'drop'].forEach(eventName => {
+    dropZone.addEventListener(eventName, unhighlight, false);
+});
+
+function highlight(e) {
+    dropZone.classList.add('border-blue-500', 'bg-blue-50');
+    dropZone.innerHTML = `
+        <div class="space-y-1 text-center">
+            <svg class="mx-auto h-12 w-12 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+            </svg>
+            <p class="text-blue-500 font-medium">Drop to upload!</p>
+        </div>
+    `;
+}
+
+function unhighlight(e) {
+    dropZone.classList.remove('border-blue-500', 'bg-blue-50');
+    dropZone.innerHTML = originalDropZoneContent;
+}
+
+dropZone.addEventListener('drop', handleDrop, false);
+fileUpload.addEventListener('change', handleFileSelect, false);
+deleteButton.addEventListener('click', handleDelete, false);
+
+function handleDrop(e) {
+    const dt = e.dataTransfer;
+    const file = dt.files[0];
+    handleFile(file);
+}
+
+function handleFileSelect(e) {
+    const file = e.target.files[0];
+    handleFile(file);
+}
+
+function handleFile(file) {
+    if (file && file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            previewImage.src = e.target.result;
+            preview.classList.remove('hidden');
+        };
+        reader.readAsDataURL(file);
+        
+        // Create a new FileList with the selected file
+        const dataTransfer = new DataTransfer();
+        dataTransfer.items.add(file);
+        fileUpload.files = dataTransfer.files;
+    }
+}
+
+function handleDelete(e) {
+    preview.classList.add('hidden');
+    previewImage.src = '';
+    fileUpload.value = '';
+}
+
+document.getElementById('questionForm').addEventListener('submit', function(e) {
+    const questionId = document.getElementById('question_id').value;
+    if (!/^[A-Za-z0-9]{8}$/.test(questionId)) {
+        e.preventDefault();
+        alert('Question ID must be exactly 8 alphanumeric characters');
+    }
+});
+</script>
+{% endblock %}

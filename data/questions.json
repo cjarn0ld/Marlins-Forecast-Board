@@ -1,0 +1,25 @@
+[
+  {
+    "id": 1,
+    "question": "Will the team reach 90 wins?",
+    "status": "open",
+    "type": "yesno",
+    "points": 100,
+    "due_date": "2024-07-01 12:00:00"
+  },
+  {
+    "id": 2,
+    "question": "How many HR will Player X hit?",
+    "status": "open",
+    "type": "numeric",
+    "points": 300,
+    "due_date": "2024-09-01 00:00:00"
+  },
+  {
+    "id": 123,
+    "question": "Will Player Y get 30+ stolen bases?",
+    "points": 100,
+    "due_date": "2025-05-01 00:00:00",
+    "difficulty": 3
+  }
+]

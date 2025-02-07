@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "metadata": {
+    "appmode": "quarto-static", 
+    "entrypoint": "app.qmd"
+  },
+  "files": {
+    "requirements.txt": "",
+    "app.qmd": "",
+    "app.py": "",
+    "static/": "",
+    "templates/": "",
+    "utils/": ""
+  }
+}
